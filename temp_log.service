@@ -1,0 +1,14 @@
+[Unit]
+Description=uWSGI Emperor
+After=syslog.target
+
+[Service]
+ExecStart = /var/www/temp_log/venv/bin/uwsgi --ini /var/www/temp_log/temp_log_uwsgi.ini
+Restart = always
+KillSignal = SIGQUIT
+Type = notify
+StandardError = syslog
+NotifyAccess = all
+
+[Install]
+WantedBy = multi-user.target
