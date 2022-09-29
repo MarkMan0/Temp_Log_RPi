@@ -8,11 +8,6 @@ import arrow
 
 app = Flask(__name__)
 
-@app.route('/')
-def hello():
-    return 'Hello UWSGI!'
-
-
 @app.route('/log_values', methods=['POST', ])
 def log_sensor():
     sensor_id = request.form.get('sensor_id', type=int)
@@ -26,8 +21,8 @@ def log_sensor():
         return retval, 400
 
 # Add date limits in the URL #Arguments: from=2015-03-04&to=2015-03-05
-@app.route("/lab_env_db", methods=['GET'])
-def lab_env_db():
+@app.route("/", methods=['GET'])
+def render_records():
     temperatures, humidities, timezone, from_date_str, to_date_str = get_records()
 
     # Create new record tables so that datetimes are adjusted back to the user browser's time zone.
@@ -42,13 +37,18 @@ def lab_env_db():
         local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm:ss").to(timezone)
         time_adjusted_humidities.append(
             [local_timedate.format('YYYY-MM-DD HH:mm:ss'), round(record[1], 2)])
+        
+    
+    table_entries = 5
+    table_idxs = list(range(0, len(temperatures), int(1 + len(temperatures) / float(table_entries))))
+    table_idxs[-1] = len(temperatures) - 1
 
     return render_template("temp_table.html",   timezone=timezone,
                            temp=time_adjusted_temperatures,
                            hum=time_adjusted_humidities,
                            from_date=from_date_str,
                            to_date=to_date_str,
-                           query_string=request.query_string)
+                           table_entries=table_idxs)
 
 
 def get_records():
