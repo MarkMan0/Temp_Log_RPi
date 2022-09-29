@@ -8,6 +8,7 @@ import arrow
 
 app = Flask(__name__)
 
+
 @app.route('/log_values', methods=['POST', ])
 def log_sensor():
     sensor_id = request.form.get('sensor_id', type=int)
@@ -20,46 +21,88 @@ def log_sensor():
     else:
         return retval, 400
 
-# Add date limits in the URL #Arguments: from=2015-03-04&to=2015-03-05
+
+def _shift_to_timezone(records: list, timezone: str) -> list:
+    ret = []
+    for record in records:
+        t = arrow.get(record[0], "YYYY-MM-DD HH:mm:ss").to(timezone).format('YYYY-MM-DD HH:mm:ss')
+        ret.append((t, record[1], ))
+    return ret
+        
+def _records_to_dict(records: list) -> list:
+    ret = []
+    for record in records:
+        date = datetime.datetime.strptime(record[0], "%Y-%m-%d %H:%M:%S")
+        ret.append({
+            'year': date.year,
+            'month': date.month,
+            'day': date.day,
+            'hour': date.hour,
+            'minute': date.minute,
+            'value': record[1],
+            'date_str': record[0],
+        })
+    return ret
+
 @app.route("/", methods=['GET'])
 def render_records():
     temperatures, humidities, timezone, from_date_str, to_date_str = get_records()
 
-    # Create new record tables so that datetimes are adjusted back to the user browser's time zone.
-    time_adjusted_temperatures = []
-    time_adjusted_humidities = []
-    for record in temperatures:
-        local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm:ss").to(timezone)
-        time_adjusted_temperatures.append(
-            [local_timedate.format('YYYY-MM-DD HH:mm:ss'), round(record[1], 2)])
+    temperatures = _shift_to_timezone(temperatures, timezone)
+    humidities = _shift_to_timezone(humidities, timezone)
 
-    for record in humidities:
-        local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm:ss").to(timezone)
-        time_adjusted_humidities.append(
-            [local_timedate.format('YYYY-MM-DD HH:mm:ss'), round(record[1], 2)])
-        
+    temp_data = {
+        'column_name': 'Temperature',
+        'unit': 'Celsius',
+        'title': 'Temperature',
+        'data': _records_to_dict(temperatures),
+        'div_id': 'chart_temps',
+    }
+    hum_data = {
+        'column_name': 'Humidity',
+        'unit': 'Percent',
+        'title': 'Humidity',
+        'data': _records_to_dict(humidities),
+        'div_id': 'chart_humid',    
+    }
     
+
     table_entries = 5
-    table_idxs = list(range(0, len(temperatures), int(1 + len(temperatures) / float(table_entries))))
+    table_idxs = list(range(0, len(temperatures), int(
+        1 + len(temperatures) / float(table_entries))))
     table_idxs[-1] = len(temperatures) - 1
 
     return render_template("temp_table.html",   timezone=timezone,
-                           temp=time_adjusted_temperatures,
-                           hum=time_adjusted_humidities,
+                           temp=temp_data,
+                           hum=hum_data,
                            from_date=from_date_str,
                            to_date=to_date_str,
                            table_entries=table_idxs)
+    
 
 
 def get_records():
+    ####
+    #### STEP 1: retrieve date from request, or choose current as default
+    #### Get other values
+    ####
     from_date_str = request.args.get('from', time.strftime(
-        "%Y-%m-%d 00:00"))  # Get the from date value from the URL
+        "%Y-%m-%d 00:00"))  # Get the from date or current time
     to_date_str = request.args.get('to', time.strftime(
-        "%Y-%m-%d %H:%M"))  # Get the to date value from the URL
-    timezone = request.args.get('timezone', 'Etc/UTC')
-    # This will return a string, if field range_h exists in the request
+        "%Y-%m-%d %H:%M"))  # Get the to date or current time
+    if not validate_date(from_date_str):
+        from_date_str = time.strftime("%Y-%m-%d 00:00")
+    if not validate_date(to_date_str):
+        to_date_str = time.strftime("%Y-%m-%d %H:%M")
+    
+    # Create datetime object so that we can convert to UTC from the browser's local time
+    from_date_obj = datetime.datetime.strptime(from_date_str, '%Y-%m-%d %H:%M')
+    to_date_obj = datetime.datetime.strptime(to_date_str, '%Y-%m-%d %H:%M')
+    
+    timezone = request.args.get('timezone', 'Etc/UTC') # get the timezone or UTC default
+    
     range_h_form = request.args.get('range_h', '')
-    range_h_int = "nan"  # initialise this variable with not a number
+    range_h_int = None
 
     try:
         range_h_int = int(range_h_form)
@@ -67,41 +110,40 @@ def get_records():
         pass
 
 
-    # Validate date before sending it to the DB
-    if not validate_date(from_date_str):
-        from_date_str = time.strftime("%Y-%m-%d 00:00")
-    if not validate_date(to_date_str):
-        # Validate date before sending it to the DB
-        to_date_str = time.strftime("%Y-%m-%d %H:%M")
-    # Create datetime object so that we can convert to UTC from the browser's local time
-    from_date_obj = datetime.datetime.strptime(from_date_str, '%Y-%m-%d %H:%M')
-    to_date_obj = datetime.datetime.strptime(to_date_str, '%Y-%m-%d %H:%M')
+    ###
+    ### STEP 2: convert to UTC
+    ###
 
-    # If range_h is defined, we don't need the from and to times
-    if isinstance(range_h_int, int):
-        arrow_time_from = arrow.utcnow().shift(hours=-range_h_int)
-        arrow_time_to = arrow.utcnow()
-        from_date_utc = arrow_time_from.strftime("%Y-%m-%d %H:%M")
-        to_date_utc = arrow_time_to.strftime("%Y-%m-%d %H:%M")
-        from_date_str = arrow_time_from.to(timezone).strftime("%Y-%m-%d %H:%M")
-        to_date_str = arrow_time_to.to(timezone).strftime("%Y-%m-%d %H:%M")
+    if range_h_int is not None:
+        # If range_h is defined, we don't need the from and to times
+        arrow_time_from = arrow.utcnow().shift(hours=-range_h_int)  # from is "before"
+        arrow_time_to = arrow.utcnow()                              # to is "now"
+        from_date_utc = arrow_time_from.strftime("%Y-%m-%d %H:%M")  # from as string
+        to_date_utc = arrow_time_to.strftime("%Y-%m-%d %H:%M")      # to as string
+        from_date_str = arrow_time_from.to(timezone).strftime("%Y-%m-%d %H:%M")     # to update form
+        to_date_str = arrow_time_to.to(timezone).strftime("%Y-%m-%d %H:%M")         # to update form
     else:
-        # Convert datetimes to UTC so we can retrieve the appropriate records from the database
+        # get the range from date time picker
+        # change time zone and convert to string
         from_date_utc = arrow.get(from_date_obj, timezone).to(
-            'Etc/UTC').strftime("%Y-%m-%d %H:%M")
+            'Etc/UTC').strftime("%Y-%m-%d %H:%M") 
         to_date_utc = arrow.get(to_date_obj, timezone).to(
             'Etc/UTC').strftime("%Y-%m-%d %H:%M")
 
+
+    ###
+    ### STEP 3: retrieve from database
+    ###
     conn = sqlite3.connect('/var/www/temp_log/temp_db.db')
     curs = conn.cursor()
     curs.execute("SELECT * FROM temperature WHERE read_time BETWEEN ? AND ?",
-                 (from_date_utc.format('YYYY-MM-DD HH:mm:ss'), to_date_utc.format('YYYY-MM-DD HH:mm:ss')))
+                 (from_date_utc, to_date_utc))
     temperatures = curs.fetchall()
     curs.execute("SELECT * FROM humidity WHERE read_time BETWEEN ? AND ?",
-                 (from_date_utc.format('YYYY-MM-DD HH:mm:ss'), to_date_utc.format('YYYY-MM-DD HH:mm:ss')))
+                 (from_date_utc, to_date_utc))
     humidities = curs.fetchall()
     conn.close()
-
+    
     return [temperatures, humidities, timezone, from_date_str, to_date_str]
 
 
@@ -114,4 +156,4 @@ def validate_date(d):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3600)
+    app.run(host='0.0.0.0', port=3601)

@@ -94,8 +94,8 @@
                     <tbody>
                         {% for i in table_entries %}
                         <tr>
-                            <td>{{temp[i][0]}}</td>
-                            <td>{{'%0.2f'|format(temp[i][1])}}</td>
+                            <td>{{temp['data'][i]['date_str']}}</td>
+                            <td>{{'%0.2f'|format(temp['data'][i]['value'])}}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -111,8 +111,8 @@
                     <tbody>
                         {% for i in table_entries %}
                         <tr>
-                            <td>{{hum[i][0]}}</td>
-                            <td>{{'%0.2f'|format(hum[i][1])}}</td>
+                            <td>{{hum['data'][i]['date_str']}}</td>
+                            <td>{{'%0.2f'|format(hum['data'][i]['value'])}}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -161,72 +161,45 @@
 
 <script>
     google.load('visualization', '1', { packages: ['corechart'] });
-    google.setOnLoadCallback(drawChart);
+    google.setOnLoadCallback(drawCharts);
 
-    function drawChart() {
 
-        var data = new google.visualization.DataTable();
-        data.addColumn('datetime', 'Time');
-        data.addColumn('number', 'Temperature');
-        data.addRows([
-            {% for row in temp %}
-    [new Date({{ row[0][0: 4] }}, {{ row[0][5: 7] }}-1, {{ row[0][8: 10] }}, {{ row[0][11: 13] }}, {{ row[0][14: 16] }}), {{ '%0.2f'| format(row[1]) }}],
-        {% endfor %}
-        ]);
+    function render_chart(data) {
+        let gdata = new google.visualization.DataTable();
+        gdata.addColumn('datetime', 'Time');
+        gdata.addColumn('number', data['column_name']);
+        
+        for (i = 0; i < data.data.length; ++i) {
+            let curr = data.data[i];
+            let date = new Date(curr['year'], curr['month'] - 1, curr['day'], curr['hour'], curr['minute']);
+            let val = curr['value'];
+            gdata.addRow([date, val]);
+        }
 
-    var options = {
-        width: 600,
-        height: 563,
-        hAxis: {
-            title: "Date",
-            gridlines: { count: {{ temp | length }}, color: '#CCC' },
-    format: 'dd-MMM-yyyy HH:mm' },
-    vAxis: {
-        title: 'Degrees'
-    },
-    title: 'Temperature'
-      };
-
-    var chart = new google.visualization.LineChart(document.getElementById('chart_temps'));
-
-    chart.draw(data, options);
-
+        var opts = {
+            width: 600,
+            height: 563,
+            hAxis: {
+                title: "Date",
+                gridlines: { count: data.data.length, color: '#CCC' },
+            format: 'dd-MMM-yyyy HH:mm' },
+            vAxis: {
+                title: data['unit']
+            },
+            title: data['title']
+        };
+    
+        var chart = new google.visualization.LineChart(document.getElementById(data['div_id']));
+    
+        chart.draw(gdata, opts);
     }
 
-</script>
-
-<script>
-    google.load('visualization', '1', { packages: ['corechart'] });
-    google.setOnLoadCallback(drawChart);
-
-    function drawChart() {
-
-        var data = new google.visualization.DataTable();
-        data.addColumn('datetime', 'Time');
-        data.addColumn('number', 'Humidity');
-        data.addRows([
-            {% for row in hum %}
-    [new Date({{ row[0][0: 4] }}, {{ row[0][5: 7] }}-1, {{ row[0][8: 10] }}, {{ row[0][11: 13] }}, {{ row[0][14: 16] }}), {{ '%0.2f'| format(row[1]) }}],
-        {% endfor %}
-        ]);
-
-    var options = {
-        width: 600,
-        height: 563,
-        hAxis: {
-            title: "Date",
-            gridlines: { count: {{ hum | length }}, color: '#CCC' },
-    format: 'dd-MMM-yyyy HH:mm'        },
-    vAxis: {
-        title: 'Percent'
-    },
-    title: 'Humidity'
-      };
-
-    var chart = new google.visualization.LineChart(document.getElementById('chart_humid'));
-
-    chart.draw(data, options);
-
+    
+    function drawCharts() {
+        let t_data = {{ temp | tojson | safe }};
+        let h_data = {{ hum | tojson | safe }};
+        render_chart(t_data);
+        render_chart(h_data);
     }
 
 </script>
