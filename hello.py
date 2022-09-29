@@ -8,19 +8,14 @@ app = Flask(__name__)
 def hello():
     return 'Hello UWSGI!'
 
-def _val_or_none(key: str, d: dict):
-    if (key in d):
-        return d[key]
-    else:
-        return None
 
 @app.route('/log_values', methods = ['POST',])
 def log_sensor():
-    sensor_id = int(request.form.get('sensor_id'))
-    temp = float(request.form.get('temperature'))
-    humidity = float(request.form.get('humidity'))
+    sensor_id = request.form.get('sensor_id', type=int)
+    temp = request.form.get('temperature', type=float)
+    humidity = request.form.get('humidity', type=float)
     success = log_DHT(sensor_id, temp, humidity)
-    retval = f'ID: {sensor_id}, temp: {temp}, hum: {humidity}, form: {request.form}'
+    retval = f'ID: {sensor_id}, temp: {temp}, hum: {humidity}'
     if success:
         return retval, 200
     else:
