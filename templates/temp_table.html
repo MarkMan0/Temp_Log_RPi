@@ -81,8 +81,25 @@
             </div>
         </div>
         <div class="row">
-            <div class="one-third column" style="margin-top: 5%">
-                <strong>Showing all records</strong>
+            <div class="eleven columns" style="margin-top: 5%">
+                <form id="sensor_id" method="GET">
+                    <div class="row">
+                        <input type="submit" id="sensor_btn_0" name="sensor_id" value="Sensor 0"/>
+                    </div>
+                    <div class="row">
+                        <input type="submit" id="sensor_btn_1" name="sensor_id" value="Sensor 1"/>
+                    </div>
+                    <div class="row">
+                        <input type="submit" id="sensor_btn_2" name="sensor_id" value="Sensor 2"/>
+                    </div>
+                </form>
+                <div class="row" style="margin-bottom: 5%">
+                    <strong style="margin-bottom: 5%">{{ sensor_name }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="one-third column">
                 <h2>Temperatures</h2>
                 <table class="u-full-width">
                     <thead>

@@ -37,15 +37,11 @@ def _records_to_dict(records: list) -> list:
     return ret
 
 
+
+
 @app.route("/", methods=['GET'])
-def default_records():
-    return render_records(0)
-
-
-@app.route("/<sensor_id>", methods=['GET'])
-def render_records(sensor_id: int):
-    temperatures, humidities, from_date_str, to_date_str = get_records(
-        sensor_id)
+def render_records():
+    temperatures, humidities, from_date_str, to_date_str, sensor_name = get_records()
 
     temp_data = {
         'column_name': 'Temperature',
@@ -72,10 +68,11 @@ def render_records(sensor_id: int):
                            hum=hum_data,
                            from_date=from_date_str,
                            to_date=to_date_str,
-                           table_entries=table_idxs)
+                           table_entries=table_idxs,
+                           sensor_name = sensor_name)
 
 
-def get_records(s_id: int):
+def get_records():
     ####
     # STEP 1: retrieve date from request, or choose current as default
     # Get other values
@@ -96,6 +93,13 @@ def get_records(s_id: int):
         range_h_int = int(range_h_form)
     except:
         pass
+    
+    s_id = 0
+    try:
+        btn_value = request.args.get('sensor_id', '0', type=str)
+        s_id = int("".join(filter(str.isdigit, btn_value)))
+    except ValueError:
+        s_id = 0
 
     ###
     # STEP 2: convert to UTC
@@ -119,9 +123,17 @@ def get_records(s_id: int):
     curs.execute("SELECT * FROM humidity WHERE read_time BETWEEN ? AND ? AND sensorID == (?)",
                  (from_date_str, to_date_str, s_id))
     humidities = curs.fetchall()
+    
+    curs.execute("SELECT sensor_name FROM sensor_names WHERE sensorID == (?)", (s_id, ))
+    records = curs.fetchall()
+    if len(records) >= 1:
+        s_name = records[0][0]
+    else:
+        s_name = ""
+    
     conn.close()
 
-    return [temperatures, humidities, from_date_str, to_date_str]
+    return [temperatures, humidities, from_date_str, to_date_str, s_name]
 
 
 def validate_date(d):
