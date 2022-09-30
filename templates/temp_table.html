@@ -194,10 +194,25 @@
         chart.draw(gdata, opts);
     }
 
+    function moving_average(data, n) {
+        for (let i = 0; i < data.length; ++i) {
+            idx_from = Math.max(0, Math.trunc(i - n/2));
+            idx_to = Math.min(data.length, Math.trunc(i + n/2))
+
+            let sum = 0;
+            for(let idx = idx_from; idx < idx_to; ++idx) {
+                sum += data[idx]['value'];
+            }
+            data[i]['value'] = sum / (idx_to - idx_from);
+        }
+    }
+
     
     function drawCharts() {
         let t_data = {{ temp | tojson | safe }};
         let h_data = {{ hum | tojson | safe }};
+        moving_average(t_data['data'], 5);
+        moving_average(h_data['data'], 5);
         render_chart(t_data);
         render_chart(h_data);
     }
