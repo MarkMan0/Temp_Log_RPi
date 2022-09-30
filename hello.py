@@ -45,8 +45,12 @@ def _records_to_dict(records: list) -> list:
     return ret
 
 @app.route("/", methods=['GET'])
-def render_records():
-    temperatures, humidities, timezone, from_date_str, to_date_str = get_records()
+def default_records():
+    return render_records(0)
+
+@app.route("/<sensor_id>", methods=['GET'])
+def render_records(sensor_id: int):
+    temperatures, humidities, timezone, from_date_str, to_date_str = get_records(sensor_id)
 
     temperatures = _shift_to_timezone(temperatures, timezone)
     humidities = _shift_to_timezone(humidities, timezone)
@@ -81,7 +85,7 @@ def render_records():
     
 
 
-def get_records():
+def get_records(s_id: int):
     ####
     #### STEP 1: retrieve date from request, or choose current as default
     #### Get other values
@@ -136,11 +140,11 @@ def get_records():
     ###
     conn = sqlite3.connect('/var/www/temp_log/temp_db.db')
     curs = conn.cursor()
-    curs.execute("SELECT * FROM temperature WHERE read_time BETWEEN ? AND ?",
-                 (from_date_utc, to_date_utc))
+    curs.execute("SELECT * FROM temperature WHERE read_time BETWEEN ? AND ? AND sensorID == (?)",
+                 (from_date_utc, to_date_utc, s_id))
     temperatures = curs.fetchall()
-    curs.execute("SELECT * FROM humidity WHERE read_time BETWEEN ? AND ?",
-                 (from_date_utc, to_date_utc))
+    curs.execute("SELECT * FROM humidity WHERE read_time BETWEEN ? AND ? AND sensorID == (?)",
+                 (from_date_utc, to_date_utc, s_id))
     humidities = curs.fetchall()
     conn.close()
     
