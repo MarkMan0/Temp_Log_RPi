@@ -30,6 +30,9 @@ def log_DHT(sensor_id: int, temp: float, hum: float) -> bool:
         
         if datetime.datetime.now() >= next_read_time:
             if _verify_value(temp, -10, 50):
+                curs.execute("SELECT correction_value FROM correction WHERE sensorID == (?)", (sensor_id,))
+                offset = curs.fetchall()[0][0]
+                temp += offset
                 curs.execute(
                     """INSERT INTO temperature VALUES(datetime(CURRENT_TIMESTAMP, 'localtime'), (?), (?))""",
                     (temp, sensor_id))
